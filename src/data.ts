@@ -122,9 +122,10 @@ export const getActivities = async (user: number, media: number) => {
 }
 
 
-type Schedule =
-  | { episode: number, airingAt: Date }
-  | { episode: null };
+interface Schedule {
+  episode: number,
+  airingAt: Date,
+}
 
 export const getSchedule = async (media: number, startTime: Date) => {
   const all: any[] = [];
@@ -149,8 +150,7 @@ export const getSchedule = async (media: number, startTime: Date) => {
     all.push(data.AiringSchedule);
   } catch (err: any) {
     if (Array.isArray(err) && err.every(isAPIerror) && err.some(e => e.status == 404)) {
-      // If AniList doesn't have that far back, push blank episode
-      all.push({ episode: null });
+      // If AniList doesn't have that far back, simply do nothing
     }
 
     else throw err;
@@ -187,8 +187,8 @@ export const getSchedule = async (media: number, startTime: Date) => {
     if (!data || !data.Page.pageInfo.hasNextPage) break;
   }
 
-  return all.map<Schedule>(({ episode, airingAt }) => {
-    if (episode === null) return { episode: null };
-    else return { episode, airingAt: new Date(airingAt * 1000) };
-  });
+  return all.map<Schedule>(({ episode, airingAt }) => ({
+    episode,
+    airingAt: new Date(airingAt * 1000),
+  }));
 }

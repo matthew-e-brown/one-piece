@@ -20,12 +20,12 @@ const body = {
   error: document.querySelector<HTMLDivElement>('#main-error')!,
 }
 
-
-const hide = (el: HTMLElement) => el.classList.add('hidden');
 const show = (el: HTMLElement) => el.classList.remove('hidden');
 
 
 async function main(username: string, media: number) {
+
+  type DataPoint = { x: Date, y: number, label?: string };
 
   const userId = await getUserId(username);
   const activities = await getActivities(userId, media);
@@ -49,7 +49,7 @@ async function main(username: string, media: number) {
   }
 
   const activityData = activities
-    .map(activity => {
+    .map<DataPoint>(activity => {
       const x: Date = activity.createdAt;
       const y: number = activity.progress !== null
         ? Number(activity.progress.match(/\d+ - (\d+)/)?.[1])
@@ -60,9 +60,13 @@ async function main(username: string, media: number) {
         : { x, y };
     });
 
-  console.log(activityData);
+  const scheduleData = schedules
+    .map<DataPoint>(schedule => ({
+      x: schedule.airingAt,
+      y: schedule.episode,
+    }));
 
-  const chart = new Chart(body.canvas.querySelector('canvas')!, {
+  new Chart(body.canvas.querySelector('canvas')!, {
     type: 'line',
     data: {
       datasets: [
@@ -72,24 +76,39 @@ async function main(username: string, media: number) {
           stepped: true,
           borderColor: '#0061d1',
           fill: '#0061d1',
+        },
+        {
+          data: scheduleData,
+          label: 'Goal',
+          stepped: true,
+          borderColor: '#d10061',
         }
       ]
     },
     options: {
       scales: {
-        x: { type: 'time' }
+        x: {
+          type: 'time',
+        }
       },
       plugins: {
         tooltip: {
           callbacks: {
             label: (context) => {
+              // If the point has a custom label defined, use it
               const point: any = context.dataset.data[context.dataIndex];
+              if (point.label) return point.label;
+
+              // Otherwise
               switch (context.datasetIndex) {
                 // If it's the activity progress
                 case 0:
-                  if (point.label) return point.label;
-                  else return `Watched up to episode ${context.formattedValue}`;
+                  return `Watched up to episode ${context.formattedValue}`;
                 // If it's the show progress
+                case 1:
+                  const time = (context.raw as DataPoint).x;
+                  const s = (time.getTime() > new Date().getTime()) ? 'airs' : 'aired';
+                  return `Episode ${context.formattedValue} ${s}`;
               }
             }
           }
