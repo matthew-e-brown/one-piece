@@ -52,7 +52,7 @@ async function main(username: string, media: number) {
     .map<DataPoint>(activity => {
       const x: Date = activity.createdAt;
       const y: number = activity.progress !== null
-        ? Number(activity.progress.match(/\d+ - (\d+)/)?.[1])
+        ? Number(activity.progress.match(/(\d+)$/)?.[1])
         : 0;
 
       return activity.progress === null
