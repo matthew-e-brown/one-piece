@@ -1,10 +1,15 @@
-import { getActivities, getUserId } from './data';
+import { getActivities, getMediaName, getSchedule, getUserId } from './data';
+import './style.scss';
 
-const app = document.querySelector<HTMLDivElement>('#app')!;
-const templates = {
-  canvas: document.querySelector<HTMLTemplateElement>('#template-canvas')!,
-  error: document.querySelector<HTMLTemplateElement>('#template-error')!,
+
+const body = {
+  title: document.querySelector<HTMLSpanElement>('#anime-title')!,
+  canvas: document.querySelector<HTMLDivElement>('#canvas-wrapper')!,
+  error: document.querySelector<HTMLDivElement>('#main-error')!,
 }
+
+const hide = (el: HTMLElement) => el.classList.add('hidden');
+const show = (el: HTMLElement) => el.classList.remove('hidden');
 
 
 async function main(username: string, media: number) {
@@ -14,7 +19,13 @@ async function main(username: string, media: number) {
 
   console.log(activities);
 
-  // Now we just graph it...
+  if (activities.length) {
+    // Use the time from the very first status they have as the startTime
+    const startTime = activities[0].createdAt;
+    const schedules = await getSchedule(media, startTime);
+
+    console.log(schedules);
+  }
 
 }
 
@@ -34,14 +45,20 @@ try {
   const parsedMedia = parseInt(envMedia);
   if (isNaN(parsedMedia)) throw new Error("Media ID is not a number");
 
+  await getMediaName(parsedMedia).then(({ english, native }) => {
+    if (english == native) {
+      body.title.innerText = native;
+    } else {
+      body.title.innerText = `${english} / ${native}`;
+    }
+  });
+
   await main(envUser, parsedMedia);
 
 } catch (err: any) {
 
-  const error = templates.error.content.cloneNode(true) as DocumentFragment;
-  const pre = error.querySelector('pre');
-
+  const pre = body.error.querySelector('pre');
   if (pre) pre.innerText = JSON.stringify(err, null, 2);
-  app.appendChild(error);
+  show(body.error);
 
 }

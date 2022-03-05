@@ -1,3 +1,25 @@
+export interface APIError {
+  status: number,
+  message: string,
+  locations: { line: number, column: number }[],
+}
+
+export const isAPIerror = (obj: any): obj is APIError => {
+  return (
+    typeof obj['status'] == 'number' &&
+    typeof obj['message'] == 'string' &&
+    typeof obj['locations'] == 'object' &&
+    Array.isArray(obj['locations']) &&
+    obj['locations'].every(o => (
+      typeof o['line'] == 'number' &&
+      typeof o['column'] == 'number'
+    ))
+  );
+}
+
+const dateInt = (d: Date) => Math.floor(d.getTime() / 1000);
+
+
 interface QueryPayload {
   query: string,
   variables?: {
@@ -6,20 +28,38 @@ interface QueryPayload {
 }
 
 
-const graphQL = (query: QueryPayload) =>
-  fetch(`https://graphql.anilist.co`, {
+const graphQL = async (query: QueryPayload) => {
+  const data = await fetch(`https://graphql.anilist.co`, {
     method: 'POST',
     body: JSON.stringify(query),
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-  })
-    .then(res => res.json())
-    .then(json => {
-      if (json.errors) throw json.errors; // trigger Promise.reject
-      else return json.data; // unwrap data.data
-    });
+  }).then(res => res.json());
+
+  if (data.errors) throw data.errors; // trigger reject
+  else return data.data; // unwrap
+}
+
+
+export const getMediaName = async (media: number) => {
+  const data = await graphQL({
+    query: `
+      query ($media: Int!) {
+        Media(id: $media) {
+          title {
+            english
+            native
+          }
+        }
+      }
+    `,
+    variables: { media }
+  });
+
+  return data.Media.title as { english: string, native: string };
+}
 
 
 export const getUserId = async (username: string) => {
@@ -42,11 +82,11 @@ export const getUserId = async (username: string) => {
 interface Activity {
   status: string,
   progress: string | null,
-  createdAt: number,
+  createdAt: Date,
 }
 
 export const getActivities = async (user: number, media: number) => {
-  const all: Activity[] = [];
+  const all: any[] = [];
 
   // Break from within
   while (true) {
@@ -71,8 +111,84 @@ export const getActivities = async (user: number, media: number) => {
     });
 
     all.push(...data.Page.activities);
-    if (!data.Page.pageInfo.hasNextPage) break;
+    if (!data || !data.Page.pageInfo.hasNextPage) break;
   }
 
-  return all;
+  return all.map<Activity>(({ status, progress, createdAt }) => ({
+    status,
+    progress,
+    createdAt: new Date(createdAt * 1000)
+  }));
+}
+
+
+type Schedule =
+  | { episode: number, airingAt: Date }
+  | { episode: null };
+
+export const getSchedule = async (media: number, startTime: Date) => {
+  const all: any[] = [];
+
+  try {
+    // Get the episode that was most recent at `startTime`
+    const data = await graphQL({
+      query: `
+        query ($media: Int, $startTime: Int) {
+          AiringSchedule (mediaId: $media, airingAt_lesser: $startTime, sort: TIME_DESC) {
+            airingAt
+            episode
+          }
+        }
+      `,
+      variables: {
+        media,
+        startTime: dateInt(startTime),
+      }
+    });
+
+    all.push(data.AiringSchedule);
+  } catch (err: any) {
+    if (Array.isArray(err) && err.every(isAPIerror) && err.some(e => e.status == 404)) {
+      // If AniList doesn't have that far back, push blank episode
+      all.push({ episode: null });
+    }
+
+    else throw err;
+  }
+
+  // Now get the rest of them, capping at 2 weeks from today
+  const today = new Date();
+  const endTime = new Date(today.getTime() + (86400 * 14 * 1000));
+
+  // Break from within
+  while (true) {
+    const data = await graphQL({
+      query: `
+        query ($media: Int, $startTime: Int, $endTime: Int) {
+          Page {
+            pageInfo {
+              hasNextPage
+            }
+            airingSchedules (mediaId: $media, airingAt_greater: $startTime, airingAt_lesser: $endTime, sort: TIME) {
+              airingAt
+              episode
+            }
+          }
+        }
+      `,
+      variables: {
+        media,
+        startTime: dateInt(startTime) - 1, // -1 for >=
+        endTime: dateInt(endTime),
+      }
+    });
+
+    all.push(...data.Page.airingSchedules);
+    if (!data || !data.Page.pageInfo.hasNextPage) break;
+  }
+
+  return all.map<Schedule>(({ episode, airingAt }) => {
+    if (episode === null) return { episode: null };
+    else return { episode, airingAt: new Date(airingAt * 1000) };
+  });
 }

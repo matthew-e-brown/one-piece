@@ -4,22 +4,21 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script defer type="module" src="/src/main.ts"></script>
     <title>Vite App</title>
   </head>
   <body>
 
-    <template id="template-canvas">
-      <div class="canvas-wrapper">
-        <canvas id="main-canvas"></canvas>
-      </div>
-    </template>
+    <h1><span id="anime-title"></span> Progress</h1>
 
-    <template id="template-error">
+    <div id="canvas-wrapper" class="hidden">
+      <canvas id="main-canvas"></canvas>
+    </div>
+
+    <div id="main-error" class="hidden">
       <strong>Something went wrong:</strong>
       <pre></pre>
-    </template>
+    </div>
 
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
