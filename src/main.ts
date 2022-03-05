@@ -15,7 +15,7 @@ import 'chartjs-adapter-luxon';
 
 
 const body = {
-  title: document.querySelector<HTMLSpanElement>('#anime-title')!,
+  title: document.querySelector<HTMLSpanElement>('#title')!,
   canvas: document.querySelector<HTMLDivElement>('#canvas-wrapper')!,
   error: document.querySelector<HTMLDivElement>('#main-error')!,
 }
@@ -127,46 +127,53 @@ async function main(username: string, media: number) {
 const envUser = import.meta.env.VITE_ANILIST_USERNAME;
 const envMedia = import.meta.env.VITE_ANILIST_MEDIA_ID;
 
-try {
+// Need a boilerplate function since top-level await is not yet supported in
+// most browsers (or at least Vite tells me it doesn't lol)
+async function bootstrap() {
+  try {
 
-  if (typeof envUser != 'string') throw new Error("Username missing from .env");
-  if (typeof envMedia != 'string') throw new Error("Media ID missing from .env");
+    if (typeof envUser != 'string') throw new Error("Username missing from .env");
+    if (typeof envMedia != 'string') throw new Error("Media ID missing from .env");
 
-  const parsedMedia = parseInt(envMedia);
-  if (isNaN(parsedMedia)) throw new Error("Media ID is not a number");
+    const parsedMedia = parseInt(envMedia);
+    if (isNaN(parsedMedia)) throw new Error("Media ID is not a number");
 
-  // Add the title first
-  await getMediaName(parsedMedia).then(({ english, native }) => {
-    if (english == native) {
-      body.title.innerText = native;
-    } else {
-      body.title.innerText = `${english} / ${native}`;
-    }
-  });
+    // Add the title first
+    const title = await getMediaName(parsedMedia);
 
-  // Setup chart.js
-  Chart.register(
-    LineController,
-    LineElement,
-    PointElement,
-    CategoryScale,
-    LinearScale,
-    TimeScale,
-    Tooltip,
-  );
+    document.title = `${envUser}'s ${title.english} Progress`;
+    body.title.innerText = title.english == title.native
+      ? `${envUser}'s ${title.native}`
+      : `${envUser}'s ${title.english} / ${title.native}`;
 
-  await main(envUser, parsedMedia);
+    // Setup chart.js
+    Chart.register(
+      LineController,
+      LineElement,
+      PointElement,
+      CategoryScale,
+      LinearScale,
+      TimeScale,
+      Tooltip,
+    );
 
-} catch (err: any) {
+    await main(envUser, parsedMedia);
+    show(body.canvas);
 
-  console.error(err);
+  } catch (err: any) {
 
-  const pre = body.error.querySelector('pre');
-  if (pre) pre.innerText = JSON.stringify(err, null, 2);
-  show(body.error);
+    console.error(err);
 
+    const pre = body.error.querySelector('pre');
+    if (pre) pre.innerText = JSON.stringify(err, null, 2);
+    show(body.error);
+
+  } finally {
+
+    console.log('Done loading');
+
+  }
 }
 
 
-// for testing
-show(body.canvas);
+bootstrap();
